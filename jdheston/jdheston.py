@@ -74,6 +74,37 @@ def truncate_curve(time_points_in, time_horizon):
     time_points_out = time_points_out[mask]
     return time_points_out
 
+# Jump (Mechkov) Heston characteristic function
+def jump_heston_cf(u, t, θ):
+    σ, ρ, v = θ
+    i = 1j
+    a = σ*ρ*v*i*u
+    return np.exp((1 - a - np.sqrt((1 - a)**2 + (σ*v)**2*u*(i + u)))/v**2*t)
+
+# objective function for jump heston calibration
+def rmse(x, expiry, logstrikes, vols):
+    model_vols = jump_heston_vols(x, expiry, logstrikes)
+    rmse = np.sqrt(np.mean((model_vols - vols)**2))
+    return rmse
+
+# Get variance swap from vols slice
+def calibrate_jump_heston(expiry, logstrikes, vols):
+
+    results =  minimize(rmse, (0.1, 0.0, 0.5),
+                        method = 'L-BFGS-B',
+                        args = (expiry, logstrikes, vols),
+                        bounds = ((0,10), (-1,1), (0,10)),
+                        options = {'maxiter': 100}
+                        )
+    return results
+
+
+
+
+
+
+
+
 # Heston characteristic function
 # def char_func(p,t,θ):
 #     σ,ρ,v,κ = θ

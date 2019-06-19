@@ -16,7 +16,7 @@ def config(scale=1.5,print_keys='False'):
     plt.rcParams['axes.grid'] = True
     plt.rcParams['axes.facecolor'] = 'ghostwhite'
 
-    plt.rcParams['grid.alpha'] = 0.1
+    plt.rcParams['grid.alpha'] = 0.5
     plt.rcParams['grid.linestyle'] = '-'
     plt.rcParams['grid.linewidth'] = 0.25
 
