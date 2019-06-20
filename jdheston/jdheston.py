@@ -99,6 +99,25 @@ def rmse(x, expiry, logstrikes, vols):
 #                         )
 #     return results
 
+class jdheston_model(object):
+    """
+    """
+    def __init__(self, times, params):
+        self.times = times
+        self.params = params
+        self.factors = params.shape[0]
+
+    def factor_frame(self, dimension):
+        d = dimension
+        m = self.times.shape[0]
+
+        headers = ['sigma'+str(d), 'rho'+str(d), 'vee'+str(d), 'epsilon'+str(d)]
+        if d >= self.factors:
+            frame = pd.DataFrame(np.zeros((m,4)), index=self.times[:,0], columns=headers)
+        else:
+            frame = pd.DataFrame(self.params[d,:,:], index=self.times[:,0], columns=headers)
+        return frame
+
 
 class vol_surface(object):
     """
