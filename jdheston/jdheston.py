@@ -1,6 +1,7 @@
 import numpy as np
+import pandas as pd
 from scipy.integrate import quad
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize
 from scipy.stats import norm
 
 # Heston characteristic function
@@ -88,19 +89,94 @@ def rmse(x, expiry, logstrikes, vols):
     return rmse
 
 # Get variance swap from vols slice
-def calibrate_jump_heston(expiry, logstrikes, vols):
+# def calibrate_jump_heston(expiry, logstrikes, vols):
+#
+#     results =  minimize(rmse, (0.1, 0.0, 0.5),
+#                         method = 'L-BFGS-B',
+#                         args = (expiry, logstrikes, vols),
+#                         bounds = ((0,10), (-1,1), (0,10)),
+#                         options = {'maxiter': 100}
+#                         )
+#     return results
 
-    results =  minimize(rmse, (0.1, 0.0, 0.5),
+
+class vol_surface(object):
+    """
+
+    """
+    def __init__(self, expiries, deltas, vols):
+        #
+        self.expiries = expiries
+        self.deltas = deltas
+        self.vols = vols
+        self.logstrikes = norm.ppf(deltas)*vols*np.sqrt(expiries) - 0.5*vols**2*expiries
+        self.frame = pd.DataFrame(vols, index=expiries[:,0], columns=deltas[0,:])
+
+    def fit_jheston(self):
+        headers = ['sigma', 'rho', 'vee', 'rmse']
+        m = len(self.expiries[:,0])
+        results = np.zeros((m, 4))
+
+        for i in range(m):
+            expiry = self.expiries[i,0]
+            logstrikes = self.logstrikes[i,:]
+            vols = self.vols[i,:]
+            results[i,:] = fit_jheston_slice(expiry, logstrikes, vols)
+
+        self.jheston = pd.DataFrame(results, index=self.expiries[:,0], columns=headers)
+        return self.jheston
+
+def fit_jheston_slice(expiry, logstrikes, vols):
+    results = minimize(jheston_rmse, (0.1, 0.0, 0.5),
                         method = 'L-BFGS-B',
                         args = (expiry, logstrikes, vols),
                         bounds = ((0,10), (-1,1), (0,10)),
                         options = {'maxiter': 100}
-                        )
-    return results
+                  )
+    return np.array([results.x[0],results.x[1],results.x[2],results.fun])
 
 
+def jheston_cf(u, t, θ):
+    σ, ρ, v = θ
+    i = 1j
+    a = σ*ρ*v*i*u
+    return np.exp((1 - a - np.sqrt((1 - a)**2 + (σ*v)**2*u*(i + u)))/v**2*t)
 
+def jheston_integrand(p,t,k,Θ):
+    ρ = (np.exp(-1j*k*p)*jheston_cf(p - .5j,t,Θ)/(p**2 + .25)).real
+    return ρ
 
+def jheston_price(t,k,Θ,u=np.inf):
+    # have changed to 2x
+    p = 1 - 1/np.pi*np.exp(k/2)*quad(jheston_integrand,0,u,args=(t,k,Θ))[0]
+    return p
+
+def jheston_pricer(T,k,Θ):
+    m,n = k.shape
+    p = [[jheston_price(T[i],k[i,j],Θ) for j in range(n)] for i in range(m)]
+    return np.array(p)
+
+def jheston_rmse(x, expiry, logstrikes, vols):
+    T = np.array([expiry])
+    k = logstrikes[np.newaxis,:]
+    prices = jheston_pricer(T,k,x)
+    model_vols = surface(T,k,prices)[0]
+    rmse = np.sqrt(np.mean((model_vols - vols)**2))
+    return rmse
+
+# class vol_surface(object):
+#     """
+#     for converting bbg xlsx data into format which will use in python. deltas
+#     are always assumed to be forward put, ATM is for a delta neutral straddle
+#     """
+#     def __init__(self, currency, date):
+#         # data should be in the format which is naturally exported from bbg's
+#         # OVDV page
+#         nx = np.newaxis
+#         df = pd.read_excel('data/' + currency + '-' + date + '.xlsx')
+#         self.labels = df.iloc[2:,0]
+#         self.expiries = np.array([1/12,3/12,6/12,1])[]
+#         self.deltas = np.array([0.1,0.25,0.5,0.75,0.9])
 
 
 

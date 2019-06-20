@@ -31,7 +31,7 @@ def config(scale=1.5,print_keys='False'):
     plt.rcParams['savefig.dpi'] = scale*100
 
     plt.rcParams['markers.fillstyle'] = 'none'
-    plt.rcParams['lines.markersize'] = 3
+    plt.rcParams['lines.markersize'] = 5
 
     plt.rcParams['xtick.major.size'] = 0
     plt.rcParams['ytick.major.size'] = 0
