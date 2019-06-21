@@ -4,6 +4,7 @@ from scipy.integrate import quad
 from scipy.optimize import brentq, minimize
 from scipy.stats import norm
 
+####################################### TESTING VERSION!
 # Heston characteristic function
 # for SDE dV = αβ(V)^0.5dW + β(γ - V)dt, V0 = v0
 def char_func(u,t,θ):
@@ -25,6 +26,29 @@ def char_func(u,t,θ):
     C = η*κ*λ**-2*((κ-ρ*λ*i*u-d)*t-2*np.log((1-g2*np.exp(-d*t))/(1-g2)))
     D = v0*λ**-2*(κ-ρ*λ*i*u-d)*(1-np.exp(-d*t))/(1-g2*np.exp(-d*t))
     return np.exp(C + D)
+
+####################################### WORKING VERSION!!!
+# # Heston characteristic function
+# # for SDE dV = αβ(V)^0.5dW + β(γ - V)dt, V0 = v0
+# def char_func(u,t,θ):
+#     α,β,γ,v0,ρ = θ
+#     i = 1j
+#     #####################################################################
+#     # see . on p. of                                                    #
+#     # θ1 = 1-α*ρ*i*u                                                    #
+#     # θ2 = np.sqrt(θ1**2 + α**2*u*(i+u))                                #
+#     # θ3 = 0.5*β*θ2                                                     #
+#     # C = (θ1*t-2/β*np.log(np.cosh(θ3*t)+θ1/θ2*np.sinh(θ3*t)))*γ/α**2   #
+#     # D = (θ1-θ2*(θ1+θ2*np.tanh(θ3*t))/(θ2+θ1*np.tanh(θ3*t)))/β/α**2*v0 #
+#     #####################################################################
+#     # see ϕ2 on p.4 of 'the little heston trap'
+#     κ,η,λ = β,γ,α*β
+#     d = np.sqrt((ρ*λ*u*i-κ)**2+λ**2*(i*u+u**2))
+#     g1 = (κ-ρ*λ*i*u+d)/(κ-ρ*λ*i*u-d)
+#     g2 = 1/g1
+#     C = η*κ*λ**-2*((κ-ρ*λ*i*u-d)*t-2*np.log((1-g2*np.exp(-d*t))/(1-g2)))
+#     D = v0*λ**-2*(κ-ρ*λ*i*u-d)*(1-np.exp(-d*t))/(1-g2*np.exp(-d*t))
+#     return np.exp(C + D)
 
 # THIS APPEARS GOOD!!!
 # allow for float forward variance
@@ -74,6 +98,13 @@ def truncate_curve(time_points_in, time_horizon):
     mask = (time_points_out <= time_horizon)
     time_points_out = time_points_out[mask]
     return time_points_out
+
+def parameter_steps(params, time):
+    truncated_times = truncate_curve(params[:,0], time)
+    timesteps = np.ediff1d(truncated_times)
+    param_steps = params[:len(timesteps),:].copy()
+    param_steps[:,0] = timesteps
+    return param_steps
 
 # Jump (Mechkov) Heston characteristic function
 def jump_heston_cf(u, t, θ):
@@ -154,6 +185,21 @@ def fit_jheston_slice(expiry, logstrikes, vols):
                   )
     return np.array([results.x[0],results.x[1],results.x[2],results.fun])
 
+def jdheston_exponents(u, t, θ):
+    σ, ρ, v, ε = θ
+    u1, u2 = u
+    if ε == 0:
+        θ1 = 1 - σ*ρ*v*u2
+        C = (θ1 - np.sqrt(θ1**2 + (σ*v)**2*(-2*u1+ u2*(1 - u2))))/v**2*t # check this after i extraction
+        D = 0
+    else:
+        κ,η,λ = 1/ε,σ**2,σ*v/ε
+        d = np.sqrt((ρ*λ*u2-κ)**2+λ**2*(u2 - 2*u1 - u2**2))
+        g1 = (κ-ρ*λ*u2+d)/(κ-ρ*λ*u2-d)
+        g2 = 1/g1
+        C = η*κ*λ**-2*((κ-ρ*λ*u2-d)*t-2*np.log((1-g2*np.exp(-d*t))/(1-g2)))
+        D = λ**-2*(κ-ρ*λ*u2-d)*(1-np.exp(-d*t))/(1-g2*np.exp(-d*t))
+    return C, D
 
 def jheston_cf(u, t, θ):
     σ, ρ, v = θ
