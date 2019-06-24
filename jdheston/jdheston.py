@@ -136,7 +136,9 @@ def jdh_char_func(u, t, params):
     C, D = jdh_exponents((0,1j*u), param_steps[-1,0], param_steps[-1,1:])
     steps = len(param_steps[:,0])
     for i in np.arange(steps-2, -1, -1):
+        C += D*(σ[i+1]**2 - σ[i]**2)
         C2, D = jdh_exponents((D,1j*u), param_steps[i,0], param_steps[i,1:])
+        # C += C2 # without jump part
         C += C2
     return np.exp(C + D*σ[0]**2 + 0)
 
