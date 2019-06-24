@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.integrate import quad
 from scipy.optimize import brentq, minimize
 from scipy.stats import norm
+from jdheston.utils import *
 
 ####################################### TESTING VERSION!
 # Heston characteristic function
@@ -110,6 +111,55 @@ def parameter_steps(params, time):
     param_steps[:,0] = timesteps
     return param_steps
 
+
+# NOT DEALING WITH LIMIT YET!
+def jdh_exponents(u, t, θ):
+    σ, ρ, v, ε = θ
+    u1, u2 = u
+    θ1 = 1 - (σ*v)**2/ε*u1 - σ*ρ*v*u2
+    θ2 = np.sqrt(1 + (σ*v)**2*u2 - 2*σ*ρ*v*u2 - (σ*v*u2)**2*(1 - ρ**2))
+    θ3 = θ2/2/ε
+    x = θ3*t
+    y = θ1/θ2
+#     C = ((1 - σ*ρ*v*u2)*t - 2*ε*np.log(np.cosh(θ3*t) + θ1/θ2*np.sinh(θ3*t)))/v**2
+    C = ((1 - σ*ρ*v*u2)*t - 2*ε*log_cosh_sinh(x,y))/v**2
+#     D = ((1 - σ*ρ*v*u2) - θ2*(θ1 + θ2*np.tanh(θ3*t))/(θ2 + θ1*np.tanh(θ3*t)))*ε/(σ*v)**2
+    D = ((1 - σ*ρ*v*u2) - θ2*tanh_frac(x,y))*ε/(σ*v)**2
+    return C, D
+
+
+def jdh_char_func(u, t, params):
+    x, σ, ρ, v, ε = params.T
+
+    param_steps = parameter_steps(params, t)
+
+    C, D = jdh_exponents((0,1j*u), param_steps[-1,0], param_steps[-1,1:])
+    steps = len(param_steps[:,0])
+    for i in np.arange(steps-2, -1, -1):
+        C2, D = jdh_exponents((D,1j*u), param_steps[i,0], param_steps[i,1:])
+        C += C2
+    return np.exp(C + D*σ[0]**2 + 0)
+
+
+def jdh_integrand(p,t,k,Θ):
+    ρ = (np.exp(-1j*k*p)*jdh_char_func(p - .5j,t,Θ)/(p**2 + .25)).real
+    return ρ
+
+def jdh_price(t,k,Θ,u=np.inf):
+    # have changed to 2x
+    p = 1 - 1/np.pi*np.exp(k/2)*quad(jdh_integrand,0,u,args=(t,k,Θ))[0]
+    return p
+
+def jdh_pricer(T,k,Θ):
+    m,n = k.shape
+    p = [[jdh_price(T[i],k[i,j],Θ) for j in range(n)] for i in range(m)]
+    return np.array(p)
+
+
+
+
+
+
 # Jump (Mechkov) Heston characteristic function
 def jump_heston_cf(u, t, θ):
     σ, ρ, v = θ
@@ -189,21 +239,21 @@ def fit_jheston_slice(expiry, logstrikes, vols):
                   )
     return np.array([results.x[0],results.x[1],results.x[2],results.fun])
 
-def jdheston_exponents(u, t, θ):
-    σ, ρ, v, ε = θ
-    u1, u2 = u
-    if ε == 0:
-        θ1 = 1 - σ*ρ*v*u2
-        C = (θ1 - np.sqrt(θ1**2 + (σ*v)**2*(-2*u1+ u2*(1 - u2))))/v**2*t # check this after i extraction
-        D = 0
-    else:
-        κ,η,λ = 1/ε,σ**2,σ*v/ε
-        d = np.sqrt((ρ*λ*u2-κ)**2+λ**2*(u2 - 2*u1 - u2**2))
-        g1 = (κ-ρ*λ*u2+d)/(κ-ρ*λ*u2-d)
-        g2 = 1/g1
-        C = η*κ*λ**-2*((κ-ρ*λ*u2-d)*t-2*np.log((1-g2*np.exp(-d*t))/(1-g2)))
-        D = λ**-2*(κ-ρ*λ*u2-d)*(1-np.exp(-d*t))/(1-g2*np.exp(-d*t))
-    return C, D
+# def jdheston_exponents(u, t, θ):
+#     σ, ρ, v, ε = θ
+#     u1, u2 = u
+#     if ε == 0:
+#         θ1 = 1 - σ*ρ*v*u2
+#         C = (θ1 - np.sqrt(θ1**2 + (σ*v)**2*(-2*u1+ u2*(1 - u2))))/v**2*t # check this after i extraction
+#         D = 0
+#     else:
+#         κ,η,λ = 1/ε,σ**2,σ*v/ε
+#         d = np.sqrt((ρ*λ*u2-κ)**2+λ**2*(u2 - 2*u1 - u2**2))
+#         g1 = (κ-ρ*λ*u2+d)/(κ-ρ*λ*u2-d)
+#         g2 = 1/g1
+#         C = η*κ*λ**-2*((κ-ρ*λ*u2-d)*t-2*np.log((1-g2*np.exp(-d*t))/(1-g2)))
+#         D = λ**-2*(κ-ρ*λ*u2-d)*(1-np.exp(-d*t))/(1-g2*np.exp(-d*t))
+#     return C, D
 
 def jheston_cf(u, t, θ):
     σ, ρ, v = θ
@@ -246,6 +296,8 @@ def jheston_rmse(x, expiry, logstrikes, vols):
 #         self.labels = df.iloc[2:,0]
 #         self.expiries = np.array([1/12,3/12,6/12,1])[]
 #         self.deltas = np.array([0.1,0.25,0.5,0.75,0.9])
+
+
 
 
 
